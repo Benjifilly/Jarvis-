@@ -1,7 +1,7 @@
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, Runtime,
+    AppHandle, Emitter, Manager, Runtime,
 };
 
 use crate::commands::overlay;
@@ -16,11 +16,21 @@ pub fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
         true,
         None::<&str>,
     )?;
+    let marketplace = MenuItem::with_id(
+        app,
+        "marketplace",
+        "Marketplace IA (Hugging Face)",
+        true,
+        None::<&str>,
+    )?;
     let toggle = MenuItem::with_id(app, "toggle", "Afficher / Masquer", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
 
-    let menu = Menu::with_items(app, &[&toggle, &settings, &ai_model, &sep, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[&toggle, &settings, &ai_model, &marketplace, &sep, &quit],
+    )?;
 
     let _tray = TrayIconBuilder::with_id("jarvis-tray")
         .tooltip("Jarvis — Assistant IA local")
@@ -36,6 +46,12 @@ pub fn build_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
                 if let Err(err) = show_settings(app, Some("ai")) {
                     tracing::error!(?err, "open settings failed");
                 }
+            }
+            "marketplace" => {
+                if let Err(err) = show_settings(app, Some("marketplace")) {
+                    tracing::error!(?err, "open settings failed");
+                }
+                let _ = app.emit("settings://navigate", "Marketplace");
             }
             "toggle" => {
                 let h = app.clone();

@@ -11,12 +11,14 @@ use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
 
 use crate::services::{
-    ai_client::AiClient, config_store::ConfigStore, tray::build_tray, window_fx,
+    ai_client::AiClient, config_store::ConfigStore, marketplace::HfClient, tray::build_tray,
+    window_fx,
 };
 
 pub struct AppState {
     pub config: Arc<ConfigStore>,
     pub ai: Arc<AiClient>,
+    pub hf: Arc<HfClient>,
     pub cancel: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
     pub overlay_visible: Arc<parking_lot::Mutex<bool>>,
 }
@@ -37,10 +39,12 @@ pub fn run() {
             // Config + services.
             let config = Arc::new(ConfigStore::load(&handle)?);
             let ai = Arc::new(AiClient::new(Arc::clone(&config)));
+            let hf = Arc::new(HfClient::new());
 
             app.manage(AppState {
                 config: Arc::clone(&config),
                 ai: Arc::clone(&ai),
+                hf: Arc::clone(&hf),
                 cancel: Arc::new(Mutex::new(None)),
                 overlay_visible: Arc::new(parking_lot::Mutex::new(false)),
             });
@@ -84,6 +88,11 @@ pub fn run() {
             commands::overlay::open_settings,
             commands::overlay::hide_overlay,
             commands::overlay::quit_app,
+            commands::marketplace::hf_list_models,
+            commands::marketplace::hf_list_files,
+            commands::marketplace::hf_download,
+            commands::marketplace::hf_set_token,
+            commands::marketplace::hf_local_models,
         ])
         .on_window_event(|window, event| {
             // Prevent the settings window from closing the whole app.

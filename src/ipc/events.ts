@@ -28,3 +28,27 @@ export function onAiToken(
 export function onAiDone(cb: (ev: AiDoneEvent) => void): Promise<UnlistenFn> {
   return listen<AiDoneEvent>("ai://done", (e) => cb(e.payload));
 }
+
+export type DownloadProgress = {
+  repo: string;
+  file: string;
+  downloaded: number;
+  total: number | null;
+  done: boolean;
+  path: string | null;
+  error: string | null;
+};
+
+export function onDownloadProgress(
+  cb: (ev: DownloadProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<DownloadProgress>("hf://download-progress", (e) =>
+    cb(e.payload),
+  );
+}
+
+export function onSettingsNavigate(
+  cb: (tab: string) => void,
+): Promise<UnlistenFn> {
+  return listen<string>("settings://navigate", (e) => cb(e.payload));
+}

@@ -35,10 +35,10 @@
         "label": "settings",
         "title": "Paramètres — Jarvis",
         "url": "/#/settings",
-        "width": 860,
-        "height": 620,
-        "minWidth": 720,
-        "minHeight": 520,
+        "width": 1080,
+        "height": 720,
+        "minWidth": 820,
+        "minHeight": 560,
         "resizable": true,
         "decorations": true,
         "transparent": false,
@@ -48,7 +48,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: asset: https:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://localhost:* http://127.0.0.1:* https://api.openai.com https://api.groq.com; script-src 'self'"
+      "csp": "default-src 'self'; img-src 'self' data: asset: https:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://localhost:* http://127.0.0.1:* https://api.openai.com https://api.groq.com https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co; script-src 'self'"
     },
     "trayIcon": {
       "iconPath": "icons/tray.png",

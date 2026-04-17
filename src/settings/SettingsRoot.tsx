@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { getConfig, setConfig, type AppConfig } from "../ipc/commands";
+import { onSettingsNavigate } from "../ipc/events";
+import Marketplace from "./tabs/Marketplace";
 
-const tabs = ["Général", "Modèle IA", "Raccourcis"] as const;
+const tabs = ["Général", "Modèle IA", "Marketplace", "Raccourcis"] as const;
 type Tab = (typeof tabs)[number];
 
 export default function SettingsRoot() {
@@ -11,6 +13,17 @@ export default function SettingsRoot() {
 
   useEffect(() => {
     getConfig().then(setCfg).catch(() => setCfg(null));
+  }, []);
+
+  useEffect(() => {
+    const unlisten = onSettingsNavigate((target) => {
+      if ((tabs as readonly string[]).includes(target)) {
+        setTab(target as Tab);
+      }
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, []);
 
   const update = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) => {
@@ -114,6 +127,8 @@ export default function SettingsRoot() {
             </section>
           )}
 
+          {tab === "Marketplace" && <Marketplace />}
+
           {tab === "Raccourcis" && (
             <section className="space-y-4">
               <h2 className="text-base font-medium text-white/90">
@@ -130,15 +145,17 @@ export default function SettingsRoot() {
         </main>
       </div>
 
-      <footer className="flex justify-end border-t border-white/5 bg-ink-900/60 px-4 py-3">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="rounded-md bg-glow-violet/80 px-4 py-1.5 text-sm font-medium text-white shadow-glow-soft hover:bg-glow-violet disabled:opacity-50"
-        >
-          {saving ? "Enregistrement…" : "Enregistrer"}
-        </button>
-      </footer>
+      {tab !== "Marketplace" && (
+        <footer className="flex justify-end border-t border-white/5 bg-ink-900/60 px-4 py-3">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="rounded-md bg-glow-violet/80 px-4 py-1.5 text-sm font-medium text-white shadow-glow-soft hover:bg-glow-violet disabled:opacity-50"
+          >
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </button>
+        </footer>
+      )}
     </div>
   );
 }
