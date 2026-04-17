@@ -94,8 +94,6 @@ pub fn run() {
                         });
                     }
                 })?;
-                handle.global_shortcut().register(toggle_sc)?;
-                handle.global_shortcut().register(voice_sc)?;
             }
 
             // Forward global typing events while overlay is active.
