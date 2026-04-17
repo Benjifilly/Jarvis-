@@ -1,0 +1,20 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capabilities for the overlay and settings windows.",
+  "windows": ["overlay", "settings"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-set-focus",
+    "core:webview:allow-create-webview-window",
+    "core:event:default",
+    "global-shortcut:default",
+    "store:default",
+    "shell:allow-open"
+  ]
+}

@@ -1,0 +1,24 @@
+# Node
+node_modules/
+.pnpm-store/
+dist/
+.vite/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Local artifacts
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Local models (can grow big)
+models/
+*.gguf
+*.bin
