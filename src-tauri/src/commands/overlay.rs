@@ -35,6 +35,24 @@ pub async fn toggle_overlay<R: Runtime>(app: AppHandle<R>) -> Result<()> {
     Ok(())
 }
 
+pub async fn ensure_overlay_visible<R: Runtime>(app: AppHandle<R>) -> Result<()> {
+    let state = app.state::<AppState>();
+    let mut visible_flag = state.overlay_visible.lock();
+    if *visible_flag {
+        return Ok(());
+    }
+    let window = app
+        .get_webview_window("overlay")
+        .ok_or_else(|| crate::error::JarvisError::Other("overlay window missing".into()))?;
+    let _ = window.show();
+    let _ = window.set_always_on_top(true);
+    let _ = window.set_ignore_cursor_events(false);
+    let _ = window.set_focus();
+    *visible_flag = true;
+    let _ = app.emit("overlay://toggle", serde_json::json!({ "visible": true }));
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn open_settings<R: Runtime>(app: AppHandle<R>) -> Result<()> {
     if let Some(w) = app.get_webview_window("settings") {

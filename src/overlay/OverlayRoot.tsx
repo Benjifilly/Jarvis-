@@ -1,15 +1,23 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import GlowBorder from "./GlowBorder";
 import TextInputBar from "./TextInputBar";
 import ResponseBubble from "./ResponseBubble";
+import VoiceIndicator from "./VoiceIndicator";
 import { useAppStore } from "../store/useAppStore";
 import {
   onAiDone,
   onAiToken,
   onOverlayToggle,
   onTypingStarted,
+  onVoiceToggle,
 } from "../ipc/events";
-import { hideOverlay } from "../ipc/commands";
+import { hideOverlay, sendPrompt } from "../ipc/commands";
+import { useVoiceRecorder } from "./useVoiceRecorder";
+import { useTts } from "./useTts";
+
+function newMessageId(): string {
+  return `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
 
 export default function OverlayRoot() {
   const active = useAppStore((s) => s.active);
@@ -18,6 +26,27 @@ export default function OverlayRoot() {
   const setDraft = useAppStore((s) => s.setInputDraft);
   const appendToken = useAppStore((s) => s.appendToken);
   const finalizeMessage = useAppStore((s) => s.finalizeMessage);
+  const pushMessage = useAppStore((s) => s.pushMessage);
+
+  useTts();
+
+  const onTranscript = useCallback(
+    async (text: string) => {
+      const userId = newMessageId();
+      const assistantId = newMessageId();
+      pushMessage({ id: userId, role: "user", content: text });
+      pushMessage({
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        pending: true,
+      });
+      await sendPrompt(text, assistantId);
+    },
+    [pushMessage],
+  );
+
+  const { toggle: toggleVoice } = useVoiceRecorder({ onTranscript });
 
   useEffect(() => {
     const unlisteners: Array<Promise<() => void>> = [];
@@ -44,6 +73,8 @@ export default function OverlayRoot() {
       onAiDone(({ messageId }) => finalizeMessage(messageId)),
     );
 
+    unlisteners.push(onVoiceToggle(() => toggleVoice()));
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setTyping(false);
@@ -51,8 +82,6 @@ export default function OverlayRoot() {
         void hideOverlay();
         return;
       }
-      // Fluid text input: the overlay is visible but the input bar isn't shown.
-      // A printable keystroke opens the bar, pre-filled with that character.
       const state = useAppStore.getState();
       if (!state.active || state.typing) return;
       const isPrintable =
@@ -69,13 +98,21 @@ export default function OverlayRoot() {
       unlisteners.forEach((p) => p.then((fn) => fn()));
       window.removeEventListener("keydown", onKey);
     };
-  }, [appendToken, finalizeMessage, setActive, setDraft, setTyping]);
+  }, [
+    appendToken,
+    finalizeMessage,
+    setActive,
+    setDraft,
+    setTyping,
+    toggleVoice,
+  ]);
 
   return (
     <div className="relative h-full w-full">
       <GlowBorder active={active} />
       <TextInputBar />
       <ResponseBubble />
+      <VoiceIndicator />
     </div>
   );
 }

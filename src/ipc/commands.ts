@@ -1,17 +1,62 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export type ProviderKind =
+  | "local-ollama"
+  | "local-lmstudio"
+  | "groq"
+  | "openrouter"
+  | "huggingface"
+  | "google"
+  | "custom";
+
+export type GenParams = {
+  temperature: number;
+  topP: number;
+  maxTokens: number;
+  contextWindow: number;
+  presencePenalty: number;
+  frequencyPenalty: number;
+  stop: string[];
+};
+
 export type AiConfig = {
+  provider: ProviderKind;
   baseUrl: string;
   model: string;
   apiKey?: string;
   systemPrompt?: string;
-  temperature?: number;
+  params: GenParams;
+  localModelPath?: string | null;
+};
+
+export type SttMode = "auto" | "cloud" | "local";
+
+export type VoiceConfig = {
+  stt_mode: SttMode;
+  sttBaseUrl: string;
+  sttModel: string;
+  sttApiKey?: string;
+  ttsEnabled: boolean;
+  ttsVoice?: string;
+  ttsRate: number;
 };
 
 export type AppConfig = {
   ai: AiConfig;
+  voice: VoiceConfig;
   hotkey: string;
-  sttMode: "auto" | "cloud" | "local";
+  sttMode: SttMode;
+};
+
+export type ProviderInfo = {
+  id: ProviderKind;
+  name: string;
+  baseUrl: string;
+  defaultModel: string;
+  requiresApiKey: boolean;
+  signupUrl: string | null;
+  description: string;
+  category: "local" | "cloud-free" | "custom" | string;
 };
 
 export async function getConfig(): Promise<AppConfig> {
@@ -20,6 +65,14 @@ export async function getConfig(): Promise<AppConfig> {
 
 export async function setConfig(cfg: AppConfig): Promise<void> {
   return invoke("set_config", { cfg });
+}
+
+export async function listProviders(): Promise<ProviderInfo[]> {
+  return invoke("list_providers");
+}
+
+export async function probeProvider(): Promise<unknown> {
+  return invoke("probe_provider");
 }
 
 export async function sendPrompt(
@@ -43,6 +96,15 @@ export async function hideOverlay(): Promise<void> {
 
 export async function quitApp(): Promise<void> {
   return invoke("quit_app");
+}
+
+export async function transcribe(
+  audioBase64: string,
+  mime: string,
+): Promise<string> {
+  return invoke("transcribe", {
+    payload: { audio_base64: audioBase64, mime },
+  });
 }
 
 // ─── Hugging Face marketplace ───────────────────────────────────────────────

@@ -12,13 +12,14 @@ use tracing_subscriber::EnvFilter;
 
 use crate::services::{
     ai_client::AiClient, config_store::ConfigStore, marketplace::HfClient, tray::build_tray,
-    window_fx,
+    voice::VoiceClient, window_fx,
 };
 
 pub struct AppState {
     pub config: Arc<ConfigStore>,
     pub ai: Arc<AiClient>,
     pub hf: Arc<HfClient>,
+    pub voice: Arc<VoiceClient>,
     pub cancel: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
     pub overlay_visible: Arc<parking_lot::Mutex<bool>>,
 }
@@ -40,11 +41,13 @@ pub fn run() {
             let config = Arc::new(ConfigStore::load(&handle)?);
             let ai = Arc::new(AiClient::new(Arc::clone(&config)));
             let hf = Arc::new(HfClient::new());
+            let voice = Arc::new(VoiceClient::new(Arc::clone(&config)));
 
             app.manage(AppState {
                 config: Arc::clone(&config),
                 ai: Arc::clone(&ai),
                 hf: Arc::clone(&hf),
+                voice: Arc::clone(&voice),
                 cancel: Arc::new(Mutex::new(None)),
                 overlay_visible: Arc::new(parking_lot::Mutex::new(false)),
             });
@@ -58,13 +61,21 @@ pub fn run() {
                 let _ = overlay.set_ignore_cursor_events(true);
             }
 
-            // Register global shortcut Ctrl+Space for overlay toggle.
-            let shortcut = Shortcut::new(Some(Modifiers::CONTROL), Code::Space);
+            // Register global shortcuts.
+            // Ctrl+Space      → toggle overlay.
+            // Ctrl+Shift+Space → toggle overlay AND broadcast voice-shortcut event
+            //                    so the frontend can start/stop recording.
+            let toggle_sc = Shortcut::new(Some(Modifiers::CONTROL), Code::Space);
+            let voice_sc = Shortcut::new(
+                Some(Modifiers::CONTROL | Modifiers::SHIFT),
+                Code::Space,
+            );
             {
-                let handle_for_hotkey = handle.clone();
-                handle.global_shortcut().on_shortcut(shortcut, move |_app, _sc, event| {
+                let handle_for_toggle = handle.clone();
+                let handle_for_voice = handle.clone();
+                handle.global_shortcut().on_shortcut(toggle_sc, move |_app, _sc, event| {
                     if event.state() == ShortcutState::Pressed {
-                        let h = handle_for_hotkey.clone();
+                        let h = handle_for_toggle.clone();
                         tauri::async_runtime::spawn(async move {
                             if let Err(err) = commands::overlay::toggle_overlay(h).await {
                                 tracing::error!(?err, "toggle_overlay failed");
@@ -72,7 +83,19 @@ pub fn run() {
                         });
                     }
                 })?;
-                handle.global_shortcut().register(shortcut)?;
+                handle.global_shortcut().on_shortcut(voice_sc, move |_app, _sc, event| {
+                    if event.state() == ShortcutState::Pressed {
+                        let h = handle_for_voice.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(err) = commands::overlay::ensure_overlay_visible(h.clone()).await {
+                                tracing::error!(?err, "ensure_overlay_visible failed");
+                            }
+                            let _ = h.emit("voice://toggle", ());
+                        });
+                    }
+                })?;
+                handle.global_shortcut().register(toggle_sc)?;
+                handle.global_shortcut().register(voice_sc)?;
             }
 
             // Forward global typing events while overlay is active.
@@ -83,6 +106,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::config::get_config,
             commands::config::set_config,
+            commands::config::list_providers,
+            commands::config::probe_provider,
             commands::ai::send_prompt,
             commands::ai::cancel_stream,
             commands::overlay::open_settings,
@@ -93,6 +118,7 @@ pub fn run() {
             commands::marketplace::hf_download,
             commands::marketplace::hf_set_token,
             commands::marketplace::hf_local_models,
+            commands::voice::transcribe,
         ])
         .on_window_event(|window, event| {
             // Prevent the settings window from closing the whole app.

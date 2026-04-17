@@ -2,26 +2,18 @@ use std::sync::Arc;
 
 use futures_util::StreamExt;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::oneshot;
 
 use crate::error::{JarvisError, Result};
-use crate::models::ChatMessage;
+use crate::models::{ChatMessage, ProviderKind};
 use crate::services::config_store::ConfigStore;
 
 pub struct AiClient {
     http: Client,
     config: Arc<ConfigStore>,
-}
-
-#[derive(Debug, Serialize)]
-struct ChatRequest<'a> {
-    model: &'a str,
-    messages: &'a [ChatMessage],
-    stream: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature: Option<f32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -62,8 +54,11 @@ impl AiClient {
         mut cancel: oneshot::Receiver<()>,
     ) -> Result<()> {
         let cfg = self.config.get();
+        let ai = &cfg.ai;
+        let params = &ai.params;
+
         let mut messages: Vec<ChatMessage> = Vec::new();
-        if let Some(sys) = cfg.ai.system_prompt.as_deref() {
+        if let Some(sys) = ai.system_prompt.as_deref() {
             if !sys.trim().is_empty() {
                 messages.push(ChatMessage {
                     role: "system".into(),
@@ -76,16 +71,30 @@ impl AiClient {
             content: prompt,
         });
 
-        let url = format!("{}/chat/completions", cfg.ai.base_url.trim_end_matches('/'));
-        let body = ChatRequest {
-            model: &cfg.ai.model,
-            messages: &messages,
-            stream: true,
-            temperature: cfg.ai.temperature,
-        };
+        // Build request body with full parameter set. `num_ctx` goes under `options`
+        // for Ollama (OpenAI-compatible endpoint still accepts the extra field).
+        let mut body = json!({
+            "model": ai.model,
+            "messages": messages,
+            "stream": true,
+            "temperature": params.temperature,
+            "top_p": params.top_p,
+            "max_tokens": params.max_tokens,
+            "presence_penalty": params.presence_penalty,
+            "frequency_penalty": params.frequency_penalty,
+        });
+        if !params.stop.is_empty() {
+            body["stop"] = json!(params.stop);
+        }
+        if matches!(ai.provider, ProviderKind::LocalOllama) {
+            body["options"] = json!({
+                "num_ctx": params.context_window,
+            });
+        }
 
+        let url = format!("{}/chat/completions", ai.base_url.trim_end_matches('/'));
         let mut req = self.http.post(url).json(&body);
-        if let Some(key) = cfg.ai.api_key.as_deref() {
+        if let Some(key) = ai.api_key.as_deref() {
             if !key.is_empty() {
                 req = req.bearer_auth(key);
             }
@@ -131,7 +140,7 @@ impl AiClient {
                                                 if !tok.is_empty() {
                                                     let _ = app.emit(
                                                         "ai://token",
-                                                        serde_json::json!({
+                                                        json!({
                                                             "messageId": message_id,
                                                             "token": tok,
                                                         }),
@@ -154,6 +163,25 @@ impl AiClient {
             }
         }
         Ok(())
+    }
+
+    /// Best-effort probe to check the configured endpoint answers `/models`.
+    pub async fn probe(&self) -> Result<Value> {
+        let cfg = self.config.get();
+        let url = format!("{}/models", cfg.ai.base_url.trim_end_matches('/'));
+        let mut req = self.http.get(url);
+        if let Some(key) = cfg.ai.api_key.as_deref() {
+            if !key.is_empty() {
+                req = req.bearer_auth(key);
+            }
+        }
+        let resp = req.send().await?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(JarvisError::Upstream { status, body });
+        }
+        Ok(resp.json::<Value>().await.unwrap_or(Value::Null))
     }
 }
 

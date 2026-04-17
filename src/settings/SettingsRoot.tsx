@@ -1,15 +1,30 @@
 import { useEffect, useState } from "react";
-import { getConfig, setConfig, type AppConfig } from "../ipc/commands";
+import {
+  getConfig,
+  setConfig,
+  type AiConfig,
+  type AppConfig,
+  type VoiceConfig,
+} from "../ipc/commands";
 import { onSettingsNavigate } from "../ipc/events";
 import Marketplace from "./tabs/Marketplace";
+import AiModel from "./tabs/AiModel";
+import Voice from "./tabs/Voice";
 
-const tabs = ["Général", "Modèle IA", "Marketplace", "Raccourcis"] as const;
+const tabs = [
+  "Général",
+  "Modèle IA",
+  "Voix",
+  "Marketplace",
+  "Raccourcis",
+] as const;
 type Tab = (typeof tabs)[number];
 
 export default function SettingsRoot() {
   const [tab, setTab] = useState<Tab>("Modèle IA");
   const [cfg, setCfg] = useState<AppConfig | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     getConfig().then(setCfg).catch(() => setCfg(null));
@@ -27,23 +42,20 @@ export default function SettingsRoot() {
   }, []);
 
   const update = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) => {
+    setSaved(false);
     setCfg((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
-  const updateAi = <K extends keyof AppConfig["ai"]>(
-    key: K,
-    value: AppConfig["ai"][K],
-  ) => {
-    setCfg((prev) =>
-      prev ? { ...prev, ai: { ...prev.ai, [key]: value } } : prev,
-    );
-  };
+  const updateAi = (next: AiConfig) => update("ai", next);
+  const updateVoice = (next: VoiceConfig) => update("voice", next);
 
   const save = async () => {
     if (!cfg) return;
     setSaving(true);
     try {
       await setConfig(cfg);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
     } finally {
       setSaving(false);
     }
@@ -83,48 +95,32 @@ export default function SettingsRoot() {
         <main className="flex-1 overflow-auto p-6">
           {tab === "Général" && (
             <section className="space-y-4">
-              <h2 className="text-base font-medium text-white/90">
-                Général
-              </h2>
+              <h2 className="text-base font-medium text-white/90">Général</h2>
               <p className="text-sm text-white/55">
                 Jarvis tourne en arrière-plan. Utilisez le raccourci pour
                 l'activer à tout moment.
               </p>
+              <ul className="space-y-1 text-sm text-white/70">
+                <li>
+                  <kbd>Ctrl</kbd>+<kbd>Espace</kbd> — afficher / cacher l'overlay
+                </li>
+                <li>
+                  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Espace</kbd> — démarrer
+                  une requête vocale
+                </li>
+                <li>
+                  <kbd>Échap</kbd> — cacher l'overlay
+                </li>
+              </ul>
             </section>
           )}
 
           {tab === "Modèle IA" && (
-            <section className="space-y-5">
-              <h2 className="text-base font-medium text-white/90">
-                Modèle IA local
-              </h2>
-              <Field
-                label="URL de base (Ollama / LM Studio)"
-                value={cfg.ai.baseUrl}
-                onChange={(v) => updateAi("baseUrl", v)}
-                placeholder="http://localhost:11434/v1"
-              />
-              <Field
-                label="Nom du modèle"
-                value={cfg.ai.model}
-                onChange={(v) => updateAi("model", v)}
-                placeholder="llama3.2"
-              />
-              <Field
-                label="Clé API (optionnelle)"
-                value={cfg.ai.apiKey ?? ""}
-                onChange={(v) => updateAi("apiKey", v || undefined)}
-                placeholder="laisser vide pour un serveur local"
-                type="password"
-              />
-              <Field
-                label="Prompt système"
-                value={cfg.ai.systemPrompt ?? ""}
-                onChange={(v) => updateAi("systemPrompt", v)}
-                placeholder="Tu es Jarvis, un assistant concis et utile."
-                multiline
-              />
-            </section>
+            <AiModel value={cfg.ai} onChange={updateAi} />
+          )}
+
+          {tab === "Voix" && (
+            <Voice value={cfg.voice} onChange={updateVoice} />
           )}
 
           {tab === "Marketplace" && <Marketplace />}
@@ -140,13 +136,20 @@ export default function SettingsRoot() {
                 onChange={(v) => update("hotkey", v)}
                 placeholder="Ctrl+Space"
               />
+              <p className="text-[11px] text-white/45">
+                La modification du raccourci sera appliquée au prochain
+                démarrage.
+              </p>
             </section>
           )}
         </main>
       </div>
 
       {tab !== "Marketplace" && (
-        <footer className="flex justify-end border-t border-white/5 bg-ink-900/60 px-4 py-3">
+        <footer className="flex items-center justify-end gap-3 border-t border-white/5 bg-ink-900/60 px-4 py-3">
+          {saved && (
+            <span className="text-xs text-emerald-300/80">✓ Enregistré</span>
+          )}
           <button
             onClick={save}
             disabled={saving}

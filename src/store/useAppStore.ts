@@ -7,17 +7,21 @@ export type Message = {
   pending?: boolean;
 };
 
+type VoiceStatus = "idle" | "recording" | "transcribing";
+
 type State = {
   active: boolean;
   typing: boolean;
   inputDraft: string;
   messages: Message[];
+  voiceStatus: VoiceStatus;
 };
 
 type Actions = {
   setActive: (v: boolean) => void;
   setTyping: (v: boolean) => void;
   setInputDraft: (v: string) => void;
+  setVoiceStatus: (v: VoiceStatus) => void;
   pushMessage: (m: Message) => void;
   appendToken: (id: string, token: string) => void;
   finalizeMessage: (id: string) => void;
@@ -29,10 +33,12 @@ export const useAppStore = create<State & Actions>((set) => ({
   typing: false,
   inputDraft: "",
   messages: [],
+  voiceStatus: "idle",
 
   setActive: (active) => set({ active }),
   setTyping: (typing) => set({ typing }),
   setInputDraft: (inputDraft) => set({ inputDraft }),
+  setVoiceStatus: (voiceStatus) => set({ voiceStatus }),
 
   pushMessage: (m) =>
     set((s) => ({ messages: [...s.messages, m] })),

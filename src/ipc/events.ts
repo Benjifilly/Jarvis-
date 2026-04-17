@@ -52,3 +52,7 @@ export function onSettingsNavigate(
 ): Promise<UnlistenFn> {
   return listen<string>("settings://navigate", (e) => cb(e.payload));
 }
+
+export function onVoiceToggle(cb: () => void): Promise<UnlistenFn> {
+  return listen<null>("voice://toggle", () => cb());
+}
