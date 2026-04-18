@@ -28,7 +28,6 @@ export default function GlowBorder({ active }: Props) {
       <div className="glow-halo" />
       <div className="glow-streaks" />
       <div className="glow-shimmer" />
-      <div className="glow-rim" />
     </div>
   );
 }
