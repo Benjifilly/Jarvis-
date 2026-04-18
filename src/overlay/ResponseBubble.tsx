@@ -14,7 +14,7 @@ export default function ResponseBubble() {
       {visible && (
         <motion.div
           key={last.id}
-          className="pointer-events-auto fixed left-1/2 top-[30%] w-[min(820px,70vw)] max-w-[calc(100vw-4rem)] max-h-[52vh] -translate-x-1/2 overflow-auto"
+          className="pointer-events-auto fixed left-1/2 top-[50%] w-[min(820px,70vw)] max-w-[calc(100vw-4rem)] max-h-[48vh] -translate-x-1/2 -translate-y-1/2 overflow-auto"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 10 }}

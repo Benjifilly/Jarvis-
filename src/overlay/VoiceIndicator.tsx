@@ -9,7 +9,7 @@ export default function VoiceIndicator() {
     <AnimatePresence>
       {visible && (
         <motion.div
-          className="pointer-events-none fixed left-1/2 bottom-[14%] -translate-x-1/2"
+          className="pointer-events-none fixed left-1/2 top-[70%] -translate-x-1/2 -translate-y-1/2"
           initial={{ opacity: 0, y: 12, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 8, scale: 0.97 }}

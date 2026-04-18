@@ -68,12 +68,22 @@ pub fn run() {
             // Overlay window: size to the primary monitor (we explicitly avoid
             // `fullscreen: true` because Windows fullscreen windows bypass the
             // DWM compositor and become opaque — killing the transparency).
+            //
+            // Use LogicalSize so the CSS viewport matches the visible screen
+            // 1:1 on HiDPI displays — otherwise `top: 18%` on a 100 %-DPI CSS
+            // calculation renders against the over-sized physical canvas and
+            // everything drifts downward.
             if let Some(overlay) = handle.get_webview_window("overlay") {
                 if let Ok(Some(monitor)) = overlay.primary_monitor() {
+                    let scale = monitor.scale_factor();
                     let size = monitor.size();
                     let pos = monitor.position();
-                    let _ = overlay.set_size(tauri::PhysicalSize::new(size.width, size.height));
-                    let _ = overlay.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+                    let logical_w = (size.width as f64) / scale;
+                    let logical_h = (size.height as f64) / scale;
+                    let _ = overlay
+                        .set_size(tauri::LogicalSize::new(logical_w, logical_h));
+                    let _ = overlay
+                        .set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
                 }
                 let _ = window_fx::apply_overlay_effects(&overlay);
                 let _ = overlay.set_ignore_cursor_events(true);

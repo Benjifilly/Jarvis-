@@ -41,7 +41,7 @@ export default function TextInputBar() {
     <AnimatePresence>
       {typing && (
         <motion.div
-          className="pointer-events-auto fixed left-1/2 top-[18%] w-[min(720px,70vw)] max-w-[calc(100vw-4rem)] -translate-x-1/2"
+          className="pointer-events-auto fixed left-1/2 top-[32%] w-[min(720px,70vw)] max-w-[calc(100vw-4rem)] -translate-x-1/2 -translate-y-1/2"
           initial={{ opacity: 0, y: -12, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -8, scale: 0.98 }}

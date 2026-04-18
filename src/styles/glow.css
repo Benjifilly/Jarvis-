@@ -1,14 +1,13 @@
 /*
- * Jarvis — Aurora Glow Border
- * ───────────────────────────
- * Four stacked layers mimic the Apple Intelligence / Siri ambient glow:
- *   1. .glow-halo     — large soft conic gradient with 7 aurora colors
- *   2. .glow-streaks  — secondary conic spinning backwards at a different speed
- *   3. .glow-shimmer  — radial breathing pulse blended with plus-lighter
- *   4. .glow-rim      — thin, crisp colored border hugging the screen edges
- *
- * Entrance: a single "glow-enter" animation blooms the whole layer from
- * the center in ~780ms whenever the overlay toggles on.
+ * Jarvis — Aurora Glow Border (restrained)
+ * ────────────────────────────────────────
+ * The glow is framed at the edges so the desktop stays readable through the
+ * middle. Four stacked layers keep the Apple Intelligence feel without turning
+ * the whole screen into a veil:
+ *   1. .glow-halo     — wide conic ring pushed well outside the viewport
+ *   2. .glow-streaks  — faint counter-rotating streaks, edge-biased
+ *   3. .glow-shimmer  — soft vignette pulse, only near the edges
+ *   4. .glow-rim      — thin crisp colored border hugging the screen
  */
 
 @property --angle {
@@ -32,64 +31,89 @@
   animation: glow-enter 780ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* ── Layer 1 ─ Halo (big, soft, dominant color wheel) ─────────────── */
+/* ── Layer 1 ─ Halo (pushed outside the viewport, edges only) ──────── */
 .glow-halo {
   position: absolute;
-  inset: -15vmin;
+  /* Negative inset pushes the ring well beyond the viewport so only the
+     outer fringe bleeds back in — the center stays clear. */
+  inset: -30vmin;
   background: conic-gradient(
     from var(--angle),
-    rgba(99, 102, 241, 0.0) 0deg,      /* indigo fade-in */
-    rgba(139, 92, 246, 0.85) 40deg,    /* violet */
-    rgba(217, 70, 239, 0.85) 95deg,    /* fuchsia / magenta */
-    rgba(236, 72, 153, 0.85) 150deg,   /* pink */
-    rgba(56, 189, 248, 0.85) 210deg,   /* sky cyan */
-    rgba(45, 212, 191, 0.85) 265deg,   /* teal */
-    rgba(52, 211, 153, 0.85) 310deg,   /* emerald */
-    rgba(99, 102, 241, 0.0) 360deg     /* loop back to indigo */
+    rgba(99, 102, 241, 0.0) 0deg,
+    rgba(139, 92, 246, 0.45) 40deg,
+    rgba(217, 70, 239, 0.45) 95deg,
+    rgba(236, 72, 153, 0.45) 150deg,
+    rgba(56, 189, 248, 0.45) 210deg,
+    rgba(45, 212, 191, 0.45) 265deg,
+    rgba(52, 211, 153, 0.45) 310deg,
+    rgba(99, 102, 241, 0.0) 360deg
   );
-  filter: blur(90px) saturate(180%);
+  filter: blur(120px) saturate(150%);
   mix-blend-mode: screen;
-  animation: glow-spin 18s cubic-bezier(0.45, 0, 0.55, 1) infinite,
-             glow-breath 6.4s ease-in-out infinite;
+  animation: glow-spin 22s cubic-bezier(0.45, 0, 0.55, 1) infinite,
+             glow-breath 8s ease-in-out infinite;
+  /* Vignette mask: transparent in the middle, opaque near the edges so the
+     halo never bleeds over the content area. */
+  -webkit-mask: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.55) 70%,
+    rgba(0, 0, 0, 1) 100%
+  );
+          mask: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.55) 70%,
+    rgba(0, 0, 0, 1) 100%
+  );
   will-change: transform, filter;
 }
 
-/* ── Layer 2 ─ Streaks (counter-rotating, narrower, more saturated) ── */
+/* ── Layer 2 ─ Streaks (subtle, edge-biased counter rotation) ──────── */
 .glow-streaks {
   position: absolute;
-  inset: -8vmin;
+  inset: -18vmin;
   background: conic-gradient(
     from calc(var(--angle) * -1 + 90deg),
     rgba(244, 114, 182, 0.0) 0deg,
-    rgba(244, 114, 182, 0.6) 30deg,    /* pink */
+    rgba(244, 114, 182, 0.28) 30deg,
     rgba(168, 85, 247, 0.0) 70deg,
-    rgba(34, 211, 238, 0.65) 140deg,   /* cyan */
+    rgba(34, 211, 238, 0.3) 140deg,
     rgba(52, 211, 153, 0.0) 180deg,
-    rgba(251, 191, 36, 0.55) 240deg,   /* amber */
+    rgba(251, 191, 36, 0.22) 240deg,
     rgba(236, 72, 153, 0.0) 290deg,
     rgba(244, 114, 182, 0.0) 360deg
   );
-  filter: blur(40px) saturate(200%) brightness(1.1);
+  filter: blur(55px) saturate(160%);
   mix-blend-mode: screen;
-  animation: glow-spin 11s cubic-bezier(0.55, 0, 0.45, 1) infinite reverse;
-  opacity: 0.9;
+  -webkit-mask: radial-gradient(
+    ellipse at center,
+    transparent 45%,
+    rgba(0, 0, 0, 1) 85%
+  );
+          mask: radial-gradient(
+    ellipse at center,
+    transparent 45%,
+    rgba(0, 0, 0, 1) 85%
+  );
+  animation: glow-spin 14s cubic-bezier(0.55, 0, 0.45, 1) infinite reverse;
+  opacity: 0.55;
   will-change: transform, filter;
 }
 
-/* ── Layer 3 ─ Shimmer (radial pulse, lends a living "breathing") ── */
+/* ── Layer 3 ─ Shimmer (very faint edge vignette pulse) ────────────── */
 .glow-shimmer {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(
-      ellipse at 50% 50%,
-      rgba(255, 255, 255, 0) 55%,
-      rgba(139, 92, 246, 0.18) 72%,
-      rgba(236, 72, 153, 0.22) 85%,
-      rgba(56, 189, 248, 0.26) 100%
-    );
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(139, 92, 246, 0.08) 80%,
+    rgba(56, 189, 248, 0.1) 100%
+  );
   mix-blend-mode: plus-lighter;
-  animation: glow-shimmer 3.6s ease-in-out infinite;
+  animation: glow-shimmer 4.8s ease-in-out infinite;
+  opacity: 0.7;
   will-change: transform, opacity;
 }
 
@@ -99,34 +123,31 @@
   inset: 0;
   border: 1.5px solid transparent;
   border-radius: 14px;
-  /* Background uses `border-box` for the conic, and the mask cuts out the
-     padding-box so only the border stripe paints. No opaque fill — that
-     would kill the transparency of the overlay. */
   background: conic-gradient(
       from calc(var(--angle) * -1),
-      rgba(139, 92, 246, 0.9),
-      rgba(236, 72, 153, 0.9),
-      rgba(56, 189, 248, 0.9),
-      rgba(52, 211, 153, 0.9),
-      rgba(139, 92, 246, 0.9)
+      rgba(139, 92, 246, 0.85),
+      rgba(236, 72, 153, 0.85),
+      rgba(56, 189, 248, 0.85),
+      rgba(52, 211, 153, 0.85),
+      rgba(139, 92, 246, 0.85)
     )
     border-box;
   -webkit-mask: linear-gradient(#000, #000) padding-box,
                 linear-gradient(#000, #000);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
-  opacity: 0.8;
-  animation: glow-spin 9s linear infinite;
-  filter: drop-shadow(0 0 12px rgba(139, 92, 246, 0.35));
+  opacity: 0.65;
+  animation: glow-spin 12s linear infinite;
+  filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.3));
 }
 
 /* Voice-activity intensifier — bumped by the visualizer when audio spikes. */
 .glow-root[data-speaking="true"] .glow-halo {
-  filter: blur(80px) saturate(220%) brightness(1.15);
+  filter: blur(110px) saturate(180%) brightness(1.1);
 }
 .glow-root[data-speaking="true"] .glow-rim {
-  opacity: 1;
-  filter: drop-shadow(0 0 20px rgba(236, 72, 153, 0.55));
+  opacity: 0.9;
+  filter: drop-shadow(0 0 16px rgba(236, 72, 153, 0.45));
 }
 
 /* ── Keyframes ──────────────────────────────────────────────────────── */
@@ -140,11 +161,11 @@
 @keyframes glow-breath {
   0%,
   100% {
-    filter: blur(90px) saturate(180%);
-    opacity: 0.95;
+    filter: blur(120px) saturate(150%);
+    opacity: 0.9;
   }
   50% {
-    filter: blur(110px) saturate(210%) brightness(1.08);
+    filter: blur(140px) saturate(170%);
     opacity: 1;
   }
 }
@@ -152,28 +173,24 @@
 @keyframes glow-shimmer {
   0%,
   100% {
-    transform: scale(0.97);
-    opacity: 0.85;
+    transform: scale(0.98);
+    opacity: 0.55;
   }
   50% {
-    transform: scale(1.04);
-    opacity: 1;
+    transform: scale(1.02);
+    opacity: 0.8;
   }
 }
 
-/*
- * Entrance bloom: the whole layer starts heavily blurred, faded out, and
- * shrunk to 60 % from center. Over ~780ms it snaps into its resting state.
- */
 @keyframes glow-enter {
   0% {
     opacity: 0;
-    transform: scale(0.6);
-    filter: blur(40px) brightness(1.6);
+    transform: scale(0.7);
+    filter: blur(50px) brightness(1.4);
   }
   45% {
     opacity: 1;
-    filter: blur(10px) brightness(1.3);
+    filter: blur(12px) brightness(1.15);
   }
   100% {
     opacity: 1;
