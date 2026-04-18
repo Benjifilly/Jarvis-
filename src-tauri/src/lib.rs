@@ -31,6 +31,16 @@ pub fn run() {
         .try_init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // If the user launches a second instance (e.g. accidentally double-clicks
+            // the shortcut or restarts without killing the old process), bring the
+            // existing overlay to the front instead of spawning a duplicate — which
+            // would otherwise fight over the global hotkey and the tray icon.
+            if let Some(w) = app.get_webview_window("overlay") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -55,8 +65,16 @@ pub fn run() {
             // Tray icon + context menu.
             build_tray(&handle)?;
 
-            // Overlay window: make it click-through by default; toggle ON on activate.
+            // Overlay window: size to the primary monitor (we explicitly avoid
+            // `fullscreen: true` because Windows fullscreen windows bypass the
+            // DWM compositor and become opaque — killing the transparency).
             if let Some(overlay) = handle.get_webview_window("overlay") {
+                if let Ok(Some(monitor)) = overlay.primary_monitor() {
+                    let size = monitor.size();
+                    let pos = monitor.position();
+                    let _ = overlay.set_size(tauri::PhysicalSize::new(size.width, size.height));
+                    let _ = overlay.set_position(tauri::PhysicalPosition::new(pos.x, pos.y));
+                }
                 let _ = window_fx::apply_overlay_effects(&overlay);
                 let _ = overlay.set_ignore_cursor_events(true);
             }

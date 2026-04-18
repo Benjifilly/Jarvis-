@@ -22,7 +22,16 @@ impl ConfigStore {
 
         let cfg = if path.exists() {
             let raw = std::fs::read_to_string(&path)?;
-            serde_json::from_str::<AppConfig>(&raw).unwrap_or_default()
+            let mut cfg: AppConfig = serde_json::from_str(&raw).unwrap_or_default();
+            // Migrate the legacy system prompt that had no language rule — it was
+            // letting the LLM drift into other languages. Only overwrite if the
+            // user hasn't customised it.
+            if cfg.ai.system_prompt.as_deref()
+                == Some("Tu es Jarvis, un assistant local concis, précis et utile.")
+            {
+                cfg.ai.system_prompt = AppConfig::default().ai.system_prompt;
+            }
+            cfg
         } else {
             let default = AppConfig::default();
             std::fs::write(&path, serde_json::to_string_pretty(&default)?)?;

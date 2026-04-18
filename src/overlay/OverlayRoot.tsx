@@ -27,6 +27,7 @@ export default function OverlayRoot() {
   const appendToken = useAppStore((s) => s.appendToken);
   const finalizeMessage = useAppStore((s) => s.finalizeMessage);
   const pushMessage = useAppStore((s) => s.pushMessage);
+  const resetConversation = useAppStore((s) => s.resetConversation);
 
   useTts();
 
@@ -77,8 +78,7 @@ export default function OverlayRoot() {
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setTyping(false);
-        setDraft("");
+        resetConversation();
         void hideOverlay();
         return;
       }
@@ -101,6 +101,7 @@ export default function OverlayRoot() {
   }, [
     appendToken,
     finalizeMessage,
+    resetConversation,
     setActive,
     setDraft,
     setTyping,
@@ -108,7 +109,7 @@ export default function OverlayRoot() {
   ]);
 
   return (
-    <div className="relative h-full w-full">
+    <div className="fixed inset-0 h-screen w-screen pointer-events-none">
       <GlowBorder active={active} />
       <TextInputBar />
       <ResponseBubble />

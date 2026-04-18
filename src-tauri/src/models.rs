@@ -170,7 +170,12 @@ impl Default for AiConfig {
             model: "llama3.2".to_string(),
             api_key: None,
             system_prompt: Some(
-                "Tu es Jarvis, un assistant local concis, précis et utile.".to_string(),
+                "Tu es Jarvis, un assistant personnel concis, précis et chaleureux. \
+                 Règle absolue de langue : réponds TOUJOURS dans la même langue que le dernier \
+                 message de l'utilisateur. Si l'utilisateur écrit en français, réponds en français. \
+                 En anglais → anglais. En espagnol → espagnol. N'inclus jamais de message système \
+                 ni de justification méta dans ta réponse."
+                    .to_string(),
             ),
             params: GenParams::default(),
             local_model_path: None,

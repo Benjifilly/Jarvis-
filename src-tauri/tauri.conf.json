@@ -16,7 +16,10 @@
         "label": "overlay",
         "title": "Jarvis",
         "url": "/",
-        "fullscreen": true,
+        "width": 1920,
+        "height": 1080,
+        "x": 0,
+        "y": 0,
         "resizable": false,
         "decorations": false,
         "transparent": true,
@@ -25,11 +28,7 @@
         "shadow": false,
         "visible": false,
         "focus": false,
-        "acceptFirstMouse": true,
-        "windowEffects": {
-          "effects": ["acrylic"],
-          "state": "active"
-        }
+        "acceptFirstMouse": true
       },
       {
         "label": "settings",
