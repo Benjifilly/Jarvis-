@@ -47,7 +47,11 @@ export default function OverlayRoot() {
     [pushMessage],
   );
 
-  const { toggle: toggleVoice } = useVoiceRecorder({ onTranscript });
+  const {
+    start: startVoice,
+    stop: stopVoice,
+    toggle: toggleVoice,
+  } = useVoiceRecorder({ onTranscript });
 
   useEffect(() => {
     const unlisteners: Array<Promise<() => void>> = [];
@@ -55,12 +59,24 @@ export default function OverlayRoot() {
     unlisteners.push(
       onOverlayToggle(({ visible }) => {
         setActive(visible);
-        if (!visible) setTyping(false);
+        if (visible) {
+          // Siri-like flow: as soon as the overlay opens, start listening.
+          // VAD inside useVoiceRecorder auto-submits on silence. Small delay
+          // lets the bloom animation play before the mic permission prompt.
+          window.setTimeout(() => {
+            void startVoice();
+          }, 280);
+        } else {
+          stopVoice();
+          setTyping(false);
+        }
       }),
     );
 
     unlisteners.push(
       onTypingStarted(({ char }) => {
+        // User typed — switch from voice mode to text mode.
+        stopVoice();
         setDraft(char);
         setTyping(true);
       }),
@@ -78,6 +94,7 @@ export default function OverlayRoot() {
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        stopVoice();
         resetConversation();
         void hideOverlay();
         return;
@@ -88,6 +105,7 @@ export default function OverlayRoot() {
         e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
       if (isPrintable) {
         e.preventDefault();
+        stopVoice();
         setDraft(e.key);
         setTyping(true);
       }
@@ -105,6 +123,8 @@ export default function OverlayRoot() {
     setActive,
     setDraft,
     setTyping,
+    startVoice,
+    stopVoice,
     toggleVoice,
   ]);
 
