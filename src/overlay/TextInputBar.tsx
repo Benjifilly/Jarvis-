@@ -41,13 +41,13 @@ export default function TextInputBar() {
     <AnimatePresence>
       {typing && (
         <motion.div
-          className="pointer-events-auto fixed left-1/2 top-[32%] w-[min(720px,70vw)] max-w-[calc(100vw-4rem)] -translate-x-1/2 -translate-y-1/2"
+          className="pointer-events-none fixed inset-x-0 top-[34%] flex justify-center"
           initial={{ opacity: 0, y: -12, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -8, scale: 0.98 }}
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="rounded-2xl border border-white/10 bg-ink-900/70 px-5 py-4 shadow-glow-soft backdrop-blur-xl">
+          <div className="pointer-events-auto w-[min(720px,70vw)] max-w-[calc(100vw-4rem)] rounded-2xl border border-white/10 bg-ink-900/70 px-5 py-4 shadow-glow-soft backdrop-blur-xl">
             <input
               ref={inputRef}
               value={draft}

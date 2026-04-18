@@ -14,13 +14,13 @@ export default function ResponseBubble() {
       {visible && (
         <motion.div
           key={last.id}
-          className="pointer-events-auto fixed left-1/2 bottom-[18%] w-[min(820px,70vw)] max-w-[calc(100vw-4rem)] max-h-[52vh] -translate-x-1/2 overflow-auto"
+          className="pointer-events-none fixed inset-x-0 bottom-[18%] flex justify-center"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 10 }}
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="rounded-2xl border border-white/10 bg-ink-900/80 px-6 py-5 shadow-glow-soft backdrop-blur-xl">
+          <div className="pointer-events-auto w-[min(820px,70vw)] max-w-[calc(100vw-4rem)] max-h-[52vh] overflow-auto rounded-2xl border border-white/10 bg-ink-900/80 px-6 py-5 shadow-glow-soft backdrop-blur-xl">
             <article className="prose prose-invert prose-sm max-w-none text-white/90">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}

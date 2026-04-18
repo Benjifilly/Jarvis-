@@ -3,20 +3,26 @@ import { transcribe } from "../ipc/commands";
 import { useAppStore } from "../store/useAppStore";
 
 type Options = {
+  // Called with the transcribed text once an utterance is captured and STT
+  // returns a non-empty string.
   onTranscript: (text: string) => void;
+  // Fired the moment the VAD detects the user has started speaking. The host
+  // should cancel any in-flight AI stream / TTS here so the assistant gets
+  // out of the way (barge-in).
+  onSpeechStart?: () => void;
 };
 
-// VAD (voice activity detection) tuning.
-// SPEECH_RMS ─ root-mean-square above which a frame counts as speech.
-// SILENCE_RMS ─ frames below this reset the "just stopped" timer.
-// SILENCE_HOLD_MS ─ how long we stay quiet before auto-submitting (Siri-like).
-// GRACE_MS ─ ignore silence during this startup window so the user has time
-//            to begin speaking.
-// MAX_MS ─ safety cap on a single recording.
-const SPEECH_RMS = 0.035;
-const SILENCE_HOLD_MS = 1200;
-const GRACE_MS = 2500;
-const MAX_MS = 30_000;
+// VAD tuning (Siri-like behaviour).
+// SPEECH_RMS ─ mic RMS above which a frame counts as speech.
+// SILENCE_HOLD_MS ─ quiet time after last speech frame before we submit.
+// MIN_UTTERANCE_MS ─ below this length we discard (cough, chair squeak…).
+// MAX_UTTERANCE_MS ─ hard cap so a jammed mic never records forever.
+const SPEECH_RMS = 0.04;
+const SILENCE_HOLD_MS = 1100;
+const MIN_UTTERANCE_MS = 350;
+const MAX_UTTERANCE_MS = 30_000;
+
+type SessionState = "idle" | "listening" | "recording" | "transcribing";
 
 function pickMime(): string {
   const candidates = [
@@ -44,146 +50,183 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(binary);
 }
 
-export function useVoiceRecorder({ onTranscript }: Options) {
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+/**
+ * Continuous voice session. Opens the mic once, then runs an always-on VAD
+ * loop: when the user speaks, MediaRecorder starts; when they go quiet, the
+ * utterance is transcribed and forwarded via `onTranscript`. The mic stays
+ * open for the whole session so the user can barge in on the assistant at
+ * any moment — `onSpeechStart` fires each time so the host can stop TTS and
+ * cancel the current AI stream.
+ */
+export function useVoiceRecorder({ onTranscript, onSpeechStart }: Options) {
+  const stateRef = useRef<SessionState>("idle");
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const bufRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const mimeRef = useRef<string>("audio/webm");
   const rafRef = useRef<number | null>(null);
-  const startedAtRef = useRef<number>(0);
+  const speechStartAtRef = useRef<number>(0);
   const lastSpeechAtRef = useRef<number>(0);
-  const hasSpokenRef = useRef(false);
   const setVoiceStatus = useAppStore((s) => s.setVoiceStatus);
 
-  const teardownVad = useCallback(() => {
-    if (rafRef.current != null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    const ctx = audioCtxRef.current;
-    if (ctx && ctx.state !== "closed") {
-      void ctx.close();
-    }
-    audioCtxRef.current = null;
-  }, []);
-
-  const stop = useCallback(() => {
-    teardownVad();
-    const rec = recorderRef.current;
-    if (rec && rec.state !== "inactive") {
-      rec.stop();
-    }
-  }, [teardownVad]);
-
-  const start = useCallback(async () => {
-    if (recorderRef.current && recorderRef.current.state === "recording") {
-      // Already listening — user wants to cut short and submit.
-      stop();
-      return;
-    }
+  const submitRecorded = useCallback(async () => {
+    if (stateRef.current === "idle") return;
+    stateRef.current = "transcribing";
+    setVoiceStatus("transcribing");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const mime = pickMime();
-      const rec = new MediaRecorder(stream, { mimeType: mime });
+      const chunks = chunksRef.current;
       chunksRef.current = [];
-      hasSpokenRef.current = false;
+      if (chunks.length === 0) return;
+      const blob = new Blob(chunks, { type: mimeRef.current });
+      // Filter out blips too small to be real speech.
+      if (blob.size < 800) return;
+      const b64 = await blobToBase64(blob);
+      const text = await transcribe(b64, mimeRef.current);
+      const trimmed = text.trim();
+      if (trimmed) onTranscript(trimmed);
+    } catch (err) {
+      console.error("transcription failed", err);
+    } finally {
+      if ((stateRef.current as SessionState) !== "idle") {
+        stateRef.current = "listening";
+        setVoiceStatus("listening");
+      }
+    }
+  }, [onTranscript, setVoiceStatus]);
 
+  const beginRecording = useCallback(() => {
+    if (!streamRef.current || stateRef.current === "recording") return;
+    try {
+      const rec = new MediaRecorder(streamRef.current, {
+        mimeType: mimeRef.current,
+      });
+      chunksRef.current = [];
       rec.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
-
-      rec.onstop = async () => {
-        teardownVad();
-        setVoiceStatus("transcribing");
-        try {
-          const blob = new Blob(chunksRef.current, { type: mime });
-          chunksRef.current = [];
-          if (blob.size > 0 && hasSpokenRef.current) {
-            const b64 = await blobToBase64(blob);
-            const text = await transcribe(b64, mime);
-            const trimmed = text.trim();
-            if (trimmed) onTranscript(trimmed);
-          }
-        } catch (err) {
-          console.error("transcription failed", err);
-        } finally {
-          setVoiceStatus("idle");
-          streamRef.current?.getTracks().forEach((t) => t.stop());
-          streamRef.current = null;
-          recorderRef.current = null;
-        }
+      rec.onstop = () => {
+        void submitRecorded();
       };
+      recorderRef.current = rec;
+      rec.start();
+      const now = performance.now();
+      stateRef.current = "recording";
+      speechStartAtRef.current = now;
+      lastSpeechAtRef.current = now;
+      setVoiceStatus("recording");
+      onSpeechStart?.();
+    } catch (err) {
+      console.error("begin recording failed", err);
+    }
+  }, [onSpeechStart, setVoiceStatus, submitRecorded]);
 
-      // Wire up VAD: sample mic RMS each frame and call `stop()` once we see
-      // >= SILENCE_HOLD_MS of quiet after the user has actually spoken.
+  const endRecording = useCallback(() => {
+    const rec = recorderRef.current;
+    if (rec && rec.state !== "inactive") rec.stop();
+    recorderRef.current = null;
+  }, []);
+
+  const tick = useCallback(() => {
+    rafRef.current = requestAnimationFrame(tick);
+    const analyser = analyserRef.current;
+    const buf = bufRef.current;
+    if (!analyser || !buf) return;
+
+    analyser.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = (buf[i] - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / buf.length);
+    const now = performance.now();
+    const state = stateRef.current;
+
+    if (state === "listening") {
+      if (rms > SPEECH_RMS) {
+        beginRecording();
+      }
+    } else if (state === "recording") {
+      if (rms > SPEECH_RMS) {
+        lastSpeechAtRef.current = now;
+      }
+      const utteranceMs = now - speechStartAtRef.current;
+      if (utteranceMs > MAX_UTTERANCE_MS) {
+        endRecording();
+        return;
+      }
+      if (
+        utteranceMs > MIN_UTTERANCE_MS &&
+        now - lastSpeechAtRef.current > SILENCE_HOLD_MS
+      ) {
+        endRecording();
+      }
+    }
+  }, [beginRecording, endRecording]);
+
+  const open = useCallback(async () => {
+    if (stateRef.current !== "idle") return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      streamRef.current = stream;
+      mimeRef.current = pickMime();
+
       const audioCtx = new AudioContext();
       audioCtxRef.current = audioCtx;
       const src = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 1024;
-      analyser.smoothingTimeConstant = 0.25;
+      analyser.smoothingTimeConstant = 0.2;
       src.connect(analyser);
-      const buf = new Uint8Array(analyser.fftSize);
+      analyserRef.current = analyser;
+      bufRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize));
 
-      const tick = () => {
-        if (!recorderRef.current || recorderRef.current.state !== "recording") {
-          return;
-        }
-        analyser.getByteTimeDomainData(buf);
-        let sum = 0;
-        for (let i = 0; i < buf.length; i++) {
-          const v = (buf[i] - 128) / 128;
-          sum += v * v;
-        }
-        const rms = Math.sqrt(sum / buf.length);
-        const now = performance.now();
-
-        if (rms > SPEECH_RMS) {
-          hasSpokenRef.current = true;
-          lastSpeechAtRef.current = now;
-        }
-
-        const elapsed = now - startedAtRef.current;
-        if (elapsed > MAX_MS) {
-          stop();
-          return;
-        }
-        if (
-          hasSpokenRef.current &&
-          elapsed > GRACE_MS &&
-          now - lastSpeechAtRef.current > SILENCE_HOLD_MS
-        ) {
-          stop();
-          return;
-        }
-        rafRef.current = requestAnimationFrame(tick);
-      };
-
-      recorderRef.current = rec;
-      rec.start();
-      startedAtRef.current = performance.now();
-      lastSpeechAtRef.current = startedAtRef.current;
-      setVoiceStatus("recording");
+      stateRef.current = "listening";
+      setVoiceStatus("listening");
       rafRef.current = requestAnimationFrame(tick);
     } catch (err) {
       console.error("mic access denied", err);
+      stateRef.current = "idle";
       setVoiceStatus("idle");
     }
-  }, [onTranscript, setVoiceStatus, stop, teardownVad]);
+  }, [setVoiceStatus, tick]);
 
-  const toggle = useCallback(() => {
+  const close = useCallback(() => {
+    stateRef.current = "idle";
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     const rec = recorderRef.current;
-    if (rec && rec.state === "recording") stop();
-    else void start();
-  }, [start, stop]);
+    if (rec && rec.state !== "inactive") {
+      try {
+        rec.stop();
+      } catch {}
+    }
+    recorderRef.current = null;
+    chunksRef.current = [];
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state !== "closed") void ctx.close();
+    audioCtxRef.current = null;
+    analyserRef.current = null;
+    bufRef.current = null;
+    setVoiceStatus("idle");
+  }, [setVoiceStatus]);
 
   useEffect(() => {
-    return () => {
-      stop();
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-    };
-  }, [stop]);
+    return () => close();
+  }, [close]);
 
-  return { start, stop, toggle };
+  return { open, close };
 }

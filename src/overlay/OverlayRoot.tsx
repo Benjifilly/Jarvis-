@@ -11,7 +11,7 @@ import {
   onTypingStarted,
   onVoiceToggle,
 } from "../ipc/events";
-import { hideOverlay, sendPrompt } from "../ipc/commands";
+import { cancelStream, hideOverlay, sendPrompt } from "../ipc/commands";
 import { useVoiceRecorder } from "./useVoiceRecorder";
 import { useTts } from "./useTts";
 
@@ -47,11 +47,20 @@ export default function OverlayRoot() {
     [pushMessage],
   );
 
+  // Barge-in: the user just started talking over the assistant. Kill the
+  // in-flight AI stream and any TTS playback so we cleanly pivot to the
+  // new utterance.
+  const onSpeechStart = useCallback(() => {
+    void cancelStream().catch(() => {});
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  }, []);
+
   const {
-    start: startVoice,
-    stop: stopVoice,
-    toggle: toggleVoice,
-  } = useVoiceRecorder({ onTranscript });
+    open: openVoice,
+    close: closeVoice,
+  } = useVoiceRecorder({ onTranscript, onSpeechStart });
 
   useEffect(() => {
     const unlisteners: Array<Promise<() => void>> = [];
@@ -60,14 +69,15 @@ export default function OverlayRoot() {
       onOverlayToggle(({ visible }) => {
         setActive(visible);
         if (visible) {
-          // Siri-like flow: as soon as the overlay opens, start listening.
-          // VAD inside useVoiceRecorder auto-submits on silence. Small delay
-          // lets the bloom animation play before the mic permission prompt.
+          // Overlay just opened — kick off the continuous voice session
+          // after the bloom animation has breathing room. From this point
+          // the mic stays open: user can speak any time, and if they talk
+          // over Jarvis's reply the barge-in handler will cut TTS/AI off.
           window.setTimeout(() => {
-            void startVoice();
-          }, 280);
+            void openVoice();
+          }, 320);
         } else {
-          stopVoice();
+          closeVoice();
           setTyping(false);
         }
       }),
@@ -75,8 +85,9 @@ export default function OverlayRoot() {
 
     unlisteners.push(
       onTypingStarted(({ char }) => {
-        // User typed — switch from voice mode to text mode.
-        stopVoice();
+        // User started typing — switch to text mode. The voice session
+        // keeps running in the background so the user can still barge in
+        // by speaking; that's part of the "conversation mode" expectation.
         setDraft(char);
         setTyping(true);
       }),
@@ -90,11 +101,20 @@ export default function OverlayRoot() {
       onAiDone(({ messageId }) => finalizeMessage(messageId)),
     );
 
-    unlisteners.push(onVoiceToggle(() => toggleVoice()));
+    unlisteners.push(
+      onVoiceToggle(() => {
+        // Manual hotkey still works as a "force restart": close the current
+        // session and reopen it so the mic is definitely listening.
+        closeVoice();
+        window.setTimeout(() => {
+          void openVoice();
+        }, 80);
+      }),
+    );
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        stopVoice();
+        closeVoice();
         resetConversation();
         void hideOverlay();
         return;
@@ -105,7 +125,6 @@ export default function OverlayRoot() {
         e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
       if (isPrintable) {
         e.preventDefault();
-        stopVoice();
         setDraft(e.key);
         setTyping(true);
       }
@@ -118,14 +137,13 @@ export default function OverlayRoot() {
     };
   }, [
     appendToken,
+    closeVoice,
     finalizeMessage,
+    openVoice,
     resetConversation,
     setActive,
     setDraft,
     setTyping,
-    startVoice,
-    stopVoice,
-    toggleVoice,
   ]);
 
   return (

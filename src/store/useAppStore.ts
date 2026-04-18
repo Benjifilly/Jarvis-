@@ -7,7 +7,7 @@ export type Message = {
   pending?: boolean;
 };
 
-type VoiceStatus = "idle" | "recording" | "transcribing";
+type VoiceStatus = "idle" | "listening" | "recording" | "transcribing";
 
 type State = {
   active: boolean;
